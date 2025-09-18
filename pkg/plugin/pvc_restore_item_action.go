@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- * Copyright 2022 Red Hat, Inc.
+ * Copyright 2025 Red Hat, Inc.
  *
  */
 
@@ -24,8 +24,10 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/vmware-tanzu/velero/pkg/plugin/velero"
+	"kubevirt.io/kubevirt-velero-plugin/pkg/util"
 
 	corev1api "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -65,5 +67,39 @@ func (p *PVCRestoreItemAction) Execute(input *velero.RestoreItemActionExecuteInp
 		return velero.NewRestoreItemActionExecuteOutput(input.Item).WithoutRestore(), nil
 	}
 
-	return velero.NewRestoreItemActionExecuteOutput(input.Item), nil
+	// Remove VM name labels that were added by our plugin during backup
+	p.removeVMLabelsFromRestoreContent(&pvc)
+
+	pvcMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&pvc)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	return velero.NewRestoreItemActionExecuteOutput(&unstructured.Unstructured{Object: pvcMap}), nil
+}
+
+// removeVMLabelsFromRestoreContent removes VM name labels from PVC restore content if they were added by our plugin
+func (p *PVCRestoreItemAction) removeVMLabelsFromRestoreContent(pvc *corev1api.PersistentVolumeClaim) {
+	if pvc.Annotations == nil {
+		return
+	}
+
+	// Check if we added the VM label
+	if added, exists := pvc.Annotations[util.VMNameLabelAddedAnnotation]; exists && added == "true" {
+		if pvc.Labels != nil {
+			if vmName, exists := pvc.Labels[util.VMNameLabel]; exists {
+				// If we had preserved an original value, restore it; otherwise remove the label
+				if originalValue, hasOriginal := pvc.Annotations[util.VMNameOriginalAnnotation]; hasOriginal {
+					pvc.Labels[util.VMNameLabel] = originalValue
+					delete(pvc.Annotations, util.VMNameOriginalAnnotation)
+					p.log.Infof("Restored original vm-name label value '%s' for PVC %s/%s (was: %s)", originalValue, pvc.Namespace, pvc.Name, vmName)
+				} else {
+					delete(pvc.Labels, util.VMNameLabel)
+					p.log.Infof("Removed VM label from PVC %s/%s (was: %s)", pvc.Namespace, pvc.Name, vmName)
+				}
+			}
+		}
+		// Always remove our tracking annotation when we added the label
+		delete(pvc.Annotations, util.VMNameLabelAddedAnnotation)
+	}
 }

@@ -115,6 +115,7 @@ func (p *VMIBackupItemAction) Execute(item runtime.Unstructured, backup *v1.Back
 		}
 	}
 
+
 	extra, err := kvgraph.NewVirtualMachineInstanceBackupGraph(vmi)
 	if err != nil {
 		return nil, nil, errors.WithStack(err)

@@ -42,6 +42,15 @@ const (
 
 	// VeleroExcludeLabel is used to exclude an object from Velero backups.
 	VeleroExcludeLabel = "velero.io/exclude-from-backup"
+
+	// VMNameLabel is used to label PVCs with VM name during backup
+	VMNameLabel = "velero.kubevirt.io/vm-name"
+
+	// VMNameLabelAddedAnnotation tracks if VM name label was added by this plugin
+	VMNameLabelAddedAnnotation = "velero.kubevirt-velero-plugin.io/vm-label-added-by-plugin"
+
+	// VMNameOriginalAnnotation preserves user's original vm-name label value
+	VMNameOriginalAnnotation = "velero.kubevirt-velero-plugin.io/vm-name-original-backup-preservation"
 )
 
 func GetK8sClient() (*kubernetes.Clientset, error) {

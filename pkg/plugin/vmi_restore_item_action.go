@@ -101,6 +101,7 @@ func (p *VMIRestorePlugin) Execute(input *velero.RestoreItemActionExecuteInput) 
 	labels := removeRestrictedLabels(vmi.GetLabels())
 	metadata.SetLabels(labels)
 
+
 	output := velero.NewRestoreItemActionExecuteOutput(input.Item)
 	output.AdditionalItems, err = kvgraph.NewVirtualMachineInstanceRestoreGraph(vmi)
 	if err != nil {
