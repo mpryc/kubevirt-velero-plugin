@@ -97,6 +97,29 @@ func (p *DVBackupItemAction) handlePVC(item runtime.Unstructured) (runtime.Unstr
 	}
 	p.log.Infof("handling PVC %v/%v", metadata.GetNamespace(), metadata.GetName())
 
+	// Add UID label for selective restore
+	labels := metadata.GetLabels()
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+	pvcUID := string(metadata.GetUID())
+	if pvcUID != "" {
+		// Handle collision detection - preserve original value if different
+		if existingValue, exists := labels[util.PVCUIDLabel]; exists && existingValue != pvcUID {
+			annotations := metadata.GetAnnotations()
+			if annotations == nil {
+				annotations = make(map[string]string)
+			}
+			annotations[util.OriginalPVCUIDAnnotation] = existingValue
+			metadata.SetAnnotations(annotations)
+			p.log.Infof("Preserving original label value %s=%s for PVC %s/%s", util.PVCUIDLabel, existingValue, metadata.GetNamespace(), metadata.GetName())
+		}
+		labels[util.PVCUIDLabel] = pvcUID
+		metadata.SetLabels(labels)
+		p.log.Infof("Added resource UID label %s=%s to PVC %s/%s", util.PVCUIDLabel, pvcUID, metadata.GetNamespace(), metadata.GetName())
+	}
+
+	// Add CDI-specific annotations if owned by DataVolume
 	dv, err := p.getOwningDataVolume(metadata)
 	if err != nil {
 		return nil, nil, err

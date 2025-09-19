@@ -80,3 +80,4 @@ func newPodRestoreItemAction(logger logrus.FieldLogger) (interface{}, error) {
 	logger.Debug("Creating PodRestoreItemAction")
 	return plugin.NewPodRestoreItemAction(logger), nil
 }
+

@@ -42,6 +42,12 @@ const (
 
 	// VeleroExcludeLabel is used to exclude an object from Velero backups.
 	VeleroExcludeLabel = "velero.io/exclude-from-backup"
+
+	// Resource UID labeling constants for selective restore
+	PVCUIDLabel = "kubevirt.io/pvc-uid"
+
+	// Collision detection annotations to preserve original values
+	OriginalPVCUIDAnnotation = "kubevirt-velero-plugin.io/original-pvc-uid"
 )
 
 func GetK8sClient() (*kubernetes.Clientset, error) {
