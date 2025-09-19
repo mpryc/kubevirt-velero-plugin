@@ -26,8 +26,12 @@ import (
 	"github.com/vmware-tanzu/velero/pkg/plugin/velero"
 
 	corev1api "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+
+	"kubevirt.io/kubevirt-velero-plugin/pkg/util"
 )
+
 
 // PVCRestoreItemAction is a backup item action for restoring DataVolumes
 type PVCRestoreItemAction struct {
@@ -59,11 +63,47 @@ func (p *PVCRestoreItemAction) Execute(input *velero.RestoreItemActionExecuteInp
 		return nil, errors.WithStack(err)
 	}
 	p.log.Infof("handling PVC %v/%v", pvc.GetNamespace(), pvc.GetName())
+
 	annotations := pvc.GetAnnotations()
 	_, inProgress := annotations[AnnInProgress]
 	if inProgress {
 		return velero.NewRestoreItemActionExecuteOutput(input.Item).WithoutRestore(), nil
 	}
 
-	return velero.NewRestoreItemActionExecuteOutput(input.Item), nil
+	// Remove resource UID labels added during backup
+	p.removeResourceUIDLabels(&pvc)
+
+	// Convert back to unstructured
+	item, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&pvc)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	return velero.NewRestoreItemActionExecuteOutput(&unstructured.Unstructured{Object: item}), nil
+}
+
+// removeResourceUIDLabels removes resource UID labels added during backup
+// Implements original value restoration logic per design document
+func (p *PVCRestoreItemAction) removeResourceUIDLabels(pvc *corev1api.PersistentVolumeClaim) {
+	if pvc.Labels == nil {
+		return
+	}
+
+	// Check if we have the plugin-added label
+	if _, exists := pvc.Labels[util.PVCUIDLabel]; exists {
+		// Check if we preserved an original value
+		if pvc.Annotations != nil {
+			if originalValue, hasOriginal := pvc.Annotations[util.OriginalPVCUIDAnnotation]; hasOriginal {
+				// Restore the original value
+				pvc.Labels[util.PVCUIDLabel] = originalValue
+				delete(pvc.Annotations, util.OriginalPVCUIDAnnotation)
+				p.log.Infof("Restored original label value %s=%s for PVC %s/%s", util.PVCUIDLabel, originalValue, pvc.GetNamespace(), pvc.GetName())
+				return
+			}
+		}
+
+		// No original value to restore - remove the plugin-added label completely
+		delete(pvc.Labels, util.PVCUIDLabel)
+		p.log.Infof("Removed plugin-added label %s from PVC %s/%s", util.PVCUIDLabel, pvc.GetNamespace(), pvc.GetName())
+	}
 }

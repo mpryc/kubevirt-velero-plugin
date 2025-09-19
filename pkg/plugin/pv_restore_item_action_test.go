@@ -1,3 +1,22 @@
+/*
+ * This file is part of the Kubevirt Velero Plugin project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * Copyright 2025 Red Hat, Inc.
+ *
+ */
+
 package plugin
 
 import (
@@ -13,61 +32,31 @@ import (
 	"kubevirt.io/kubevirt-velero-plugin/pkg/util"
 )
 
-func TestPvcRestoreExecute(t *testing.T) {
+func TestPVRestoreItemActionExecute(t *testing.T) {
 	testCases := []struct {
 		name           string
 		input          velero.RestoreItemActionExecuteInput
-		expectSkip     bool
 		expectedLabels map[string]string
 	}{
 		{
-			"Skip the unfinished PVC",
+			"Remove resource UID label from PV",
 			velero.RestoreItemActionExecuteInput{
 				Item: &unstructured.Unstructured{
 					Object: map[string]interface{}{
 						"apiVersion": "v1",
-						"kind":       "PersistentVolumeClaim",
+						"kind":       "PersistentVolume",
 						"metadata": map[string]interface{}{
-							"name": "test-pvc",
-							"annotations": map[string]string{
-								AnnInProgress: "test-pvc",
-							},
-							"ownerReferences": []interface{}{
-								map[string]interface{}{
-									"apiVersion": "cdi.kubevirt.io/v1beta1",
-									"kind":       "DataVolume",
-									"name":       "test-datavolume",
-								},
-							},
-						},
-						"spec": map[string]interface{}{},
-					},
-				},
-			},
-			true,
-			nil,
-		},
-		{
-			"Remove resource UID label from PVC",
-			velero.RestoreItemActionExecuteInput{
-				Item: &unstructured.Unstructured{
-					Object: map[string]interface{}{
-						"apiVersion": "v1",
-						"kind":       "PersistentVolumeClaim",
-						"metadata": map[string]interface{}{
-							"name":      "test-pvc",
-							"namespace": "test-namespace",
-							"uid":       "633ab84c-8529-487c-8848-99b40fbda9f5",
+							"name": "test-pv",
+							"uid":  "789def01-2345-6789-abcd-ef0123456789",
 							"labels": map[string]interface{}{
-								util.PVCUIDLabel: "633ab84c-8529-487c-8848-99b40fbda9f5",
-								"other-label":    "other-value",
+								util.PVUIDLabel: "789def01-2345-6789-abcd-ef0123456789",
+								"other-label":   "other-value",
 							},
 						},
 						"spec": map[string]interface{}{},
 					},
 				},
 			},
-			false,
 			map[string]string{
 				"other-label": "other-value",
 			},
@@ -78,40 +67,37 @@ func TestPvcRestoreExecute(t *testing.T) {
 				Item: &unstructured.Unstructured{
 					Object: map[string]interface{}{
 						"apiVersion": "v1",
-						"kind":       "PersistentVolumeClaim",
+						"kind":       "PersistentVolume",
 						"metadata": map[string]interface{}{
-							"name":      "collision-pvc",
-							"namespace": "test-namespace",
-							"uid":       "633ab84c-8529-487c-8848-99b40fbda9f5",
+							"name": "collision-pv",
+							"uid":  "789def01-2345-6789-abcd-ef0123456789",
 							"labels": map[string]interface{}{
-								util.PVCUIDLabel: "633ab84c-8529-487c-8848-99b40fbda9f5", // Plugin-added during backup
-								"other-label":    "other-value",
+								util.PVUIDLabel: "789def01-2345-6789-abcd-ef0123456789", // Plugin-added during backup
+								"other-label":   "other-value",
 							},
 							"annotations": map[string]interface{}{
-								util.OriginalPVCUIDAnnotation: "original-user-uid-value", // User's original value
+								util.OriginalPVUIDAnnotation: "original-user-pv-uid-value", // User's original value
 							},
 						},
 						"spec": map[string]interface{}{},
 					},
 				},
 			},
-			false,
 			map[string]string{
-				util.PVCUIDLabel: "original-user-uid-value", // Should be restored to original
-				"other-label":    "other-value",
+				util.PVUIDLabel: "original-user-pv-uid-value", // Should be restored to original
+				"other-label":   "other-value",
 			},
 		},
 		{
-			"Handle PVC without resource UID label",
+			"Handle PV without resource UID label",
 			velero.RestoreItemActionExecuteInput{
 				Item: &unstructured.Unstructured{
 					Object: map[string]interface{}{
 						"apiVersion": "v1",
-						"kind":       "PersistentVolumeClaim",
+						"kind":       "PersistentVolume",
 						"metadata": map[string]interface{}{
-							"name":      "test-pvc",
-							"namespace": "test-namespace",
-							"uid":       "789def01-2345-6789-abcd-ef0123456789",
+							"name": "test-pv",
+							"uid":  "456ghi78-9012-3456-7890-abcdef123456",
 							"labels": map[string]interface{}{
 								"existing-label": "existing-value",
 							},
@@ -120,33 +106,31 @@ func TestPvcRestoreExecute(t *testing.T) {
 					},
 				},
 			},
-			false,
 			map[string]string{
 				"existing-label": "existing-value",
 			},
 		},
 		{
-			"Handle PVC without any labels",
+			"Handle PV without any labels",
 			velero.RestoreItemActionExecuteInput{
 				Item: &unstructured.Unstructured{
 					Object: map[string]interface{}{
 						"apiVersion": "v1",
-						"kind":       "PersistentVolumeClaim",
+						"kind":       "PersistentVolume",
 						"metadata": map[string]interface{}{
-							"name":      "test-pvc",
-							"namespace": "test-namespace",
+							"name": "test-pv",
 						},
 						"spec": map[string]interface{}{},
 					},
 				},
 			},
-			false,
 			map[string]string{},
 		},
 	}
 
 	logrus.SetLevel(logrus.ErrorLevel)
-	action := NewPVCRestoreItemAction(logrus.StandardLogger())
+	action := NewPVRestoreItemAction(logrus.StandardLogger())
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := action.Execute(&tc.input)
@@ -154,16 +138,11 @@ func TestPvcRestoreExecute(t *testing.T) {
 				return
 			}
 
-			if tc.expectSkip {
-				assert.True(t, result.SkipRestore)
-				return
-			}
-
 			assert.False(t, result.SkipRestore)
 
-			// Extract the result PVC
-			var resultPVC corev1api.PersistentVolumeClaim
-			err = runtime.DefaultUnstructuredConverter.FromUnstructured(result.UpdatedItem.UnstructuredContent(), &resultPVC)
+			// Extract the result PV
+			var resultPV corev1api.PersistentVolume
+			err = runtime.DefaultUnstructuredConverter.FromUnstructured(result.UpdatedItem.UnstructuredContent(), &resultPV)
 			if !assert.NoError(t, err) {
 				return
 			}
@@ -173,27 +152,35 @@ func TestPvcRestoreExecute(t *testing.T) {
 				tc.expectedLabels = make(map[string]string)
 			}
 
-			if resultPVC.Labels == nil {
-				resultPVC.Labels = make(map[string]string)
+			if resultPV.Labels == nil {
+				resultPV.Labels = make(map[string]string)
 			}
 
-			assert.Equal(t, len(tc.expectedLabels), len(resultPVC.Labels), "Unexpected number of labels")
+			assert.Equal(t, len(tc.expectedLabels), len(resultPV.Labels), "Unexpected number of labels")
 
 			for expectedKey, expectedValue := range tc.expectedLabels {
-				actualValue, exists := resultPVC.Labels[expectedKey]
+				actualValue, exists := resultPV.Labels[expectedKey]
 				assert.True(t, exists, "Expected label %s not found", expectedKey)
 				assert.Equal(t, expectedValue, actualValue, "Label %s value mismatch", expectedKey)
 			}
 
 			// Verify resource UID label was removed (unless it was restored to original)
-			if tc.expectedLabels[util.PVCUIDLabel] == "" {
-				_, exists := resultPVC.Labels[util.PVCUIDLabel]
+			if tc.expectedLabels[util.PVUIDLabel] == "" {
+				_, exists := resultPV.Labels[util.PVUIDLabel]
 				assert.False(t, exists, "Resource UID label should have been removed")
 			}
 
 			// Verify collision annotation was removed if it existed
-			_, hasCollisionAnnotation := resultPVC.Annotations[util.OriginalPVCUIDAnnotation]
+			_, hasCollisionAnnotation := resultPV.Annotations[util.OriginalPVUIDAnnotation]
 			assert.False(t, hasCollisionAnnotation, "Collision annotation should have been removed")
 		})
 	}
+}
+
+func TestPVRestoreItemActionAppliesTo(t *testing.T) {
+	action := NewPVRestoreItemAction(logrus.StandardLogger())
+	selector, err := action.AppliesTo()
+
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"PersistentVolume"}, selector.IncludedResources)
 }
