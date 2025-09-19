@@ -90,6 +90,34 @@ func (p *DVBackupItemAction) Execute(item runtime.Unstructured, backup *v1.Backu
 	return item, extra, nil
 }
 
+
+func (p *DVBackupItemAction) handleDataVolume(backup *v1.Backup, item runtime.Unstructured) (runtime.Unstructured, []velero.ResourceIdentifier, error) {
+	var dv cdiv1.DataVolume
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(item.UnstructuredContent(), &dv); err != nil {
+		return nil, nil, errors.WithStack(err)
+	}
+
+	p.log.Infof("handling DataVolume %v/%v", dv.GetNamespace(), dv.GetName())
+	dvSucceeded := dv.Status.Phase == cdiv1.Succeeded
+	if dvSucceeded {
+		annotations := dv.GetAnnotations()
+		if annotations == nil {
+			annotations = make(map[string]string)
+		}
+		annotations[AnnPrePopulated] = dv.GetName()
+		dv.SetAnnotations(annotations)
+	}
+
+	dvMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&dv)
+	if err != nil {
+		return nil, nil, errors.WithStack(err)
+	}
+
+	extra := kvgraph.NewDataVolumeBackupGraph(&dv)
+
+	return &unstructured.Unstructured{Object: dvMap}, extra, nil
+}
+
 func (p *DVBackupItemAction) handlePVC(item runtime.Unstructured) (runtime.Unstructured, []velero.ResourceIdentifier, error) {
 	metadata, err := meta.Accessor(item)
 	if err != nil {
@@ -121,33 +149,6 @@ func (p *DVBackupItemAction) handlePVC(item runtime.Unstructured) (runtime.Unstr
 	return item, extra, nil
 }
 
-func (p *DVBackupItemAction) handleDataVolume(backup *v1.Backup, item runtime.Unstructured) (runtime.Unstructured, []velero.ResourceIdentifier, error) {
-	var dv cdiv1.DataVolume
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(item.UnstructuredContent(), &dv); err != nil {
-		return nil, nil, errors.WithStack(err)
-	}
-
-	p.log.Infof("handling DataVolume %v/%v", dv.GetNamespace(), dv.GetName())
-	dvSucceeded := dv.Status.Phase == cdiv1.Succeeded
-	if dvSucceeded {
-		annotations := dv.GetAnnotations()
-		if annotations == nil {
-			annotations = make(map[string]string)
-		}
-		annotations[AnnPrePopulated] = dv.GetName()
-		dv.SetAnnotations(annotations)
-	}
-
-	dvMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&dv)
-	if err != nil {
-		return nil, nil, errors.WithStack(err)
-	}
-
-	extra := kvgraph.NewDataVolumeBackupGraph(&dv)
-
-	return &unstructured.Unstructured{Object: dvMap}, extra, nil
-}
-
 func (p *DVBackupItemAction) getOwningDataVolume(metadata metav1.Object) (*cdiv1.DataVolume, error) {
 	for _, or := range metadata.GetOwnerReferences() {
 		p.log.Infof("or %+v", or)
@@ -161,3 +162,4 @@ func (p *DVBackupItemAction) getOwningDataVolume(metadata metav1.Object) (*cdiv1
 	}
 	return nil, nil
 }
+
