@@ -325,9 +325,7 @@ func isRestoreTerminal(phase v1.RestorePhase) bool {
 	return phase == v1.RestorePhaseCompleted ||
 		phase == v1.RestorePhasePartiallyFailed ||
 		phase == v1.RestorePhaseFailed ||
-		phase == v1.RestorePhaseFailedValidation ||
-		phase == v1.RestorePhaseFinalizing ||
-		phase == v1.RestorePhaseFinalizingPartiallyFailed
+		phase == v1.RestorePhaseFailedValidation
 }
 
 const restoreWaitTime = 10 * time.Minute
